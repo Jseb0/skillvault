@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkillVault - Personal Skill Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-color: #f5f5f5;
+      --text-color: #333;
+      --card-bg: #fff;
+      --skill-bg: #f0f0f0;
+    }
+    body.dark-mode {
+      --bg-color: #1e1e1e;
+      --text-color: #f5f5f5;
+      --card-bg: #2a2a2a;
+      --skill-bg: #333;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 0;
+    }
+    .app {
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: var(--card-bg);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
+    }
+    h1 {
+      text-align: center;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    input, select, button {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #skills-list {
+      margin-top: 20px;
+    }
+    .skill-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: var(--skill-bg);
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    .skill-item span {
+      font-weight: bold;
+    }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+    .filter-wrapper {
+      margin-top: 25px;
+    }
+    #chart-container {
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>SkillVault</h1>
+    <form id="skill-form">
+      <input type="text" id="skill-name" placeholder="Enter a skill (e.g., JavaScript)" required />
+      <input type="number" id="skill-progress" placeholder="Progress %" min="0" max="100" required />
+      <select id="skill-category">
+        <option value="Technical">Technical</option>
+        <option value="Soft">Soft</option>
+        <option value="Tools">Tools</option>
+      </select>
+      <button type="submit">Add Skill</button>
+    </form>
+    <div class="controls">
+      <button id="toggle-dark">🌙 Toggle Dark Mode</button>
+      <button id="export-json">📤 Export JSON</button>
+    </div>
+    <div class="filter-wrapper">
+      <label for="filter-category">Filter by Category:</label>
+      <select id="filter-category">
+        <option value="All">All</option>
+        <option value="Technical">Technical</option>
+        <option value="Soft">Soft</option>
+        <option value="Tools">Tools</option>
+      </select>
+    </div>
+    <div id="skills-list"></div>
+    <div id="chart-container">
+      <canvas id="skillsChart" height="300"></canvas>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('skill-form');
+      const skillList = document.getElementById('skills-list');
+      const toggleDarkBtn = document.getElementById('toggle-dark');
+      const exportJsonBtn = document.getElementById('export-json');
+      const filterSelect = document.getElementById('filter-category');
+      const ctx = document.getElementById('skillsChart').getContext('2d');
+
+      let skills = JSON.parse(localStorage.getItem('skills') || '[]');
+      let chart = null;
+
+      function renderChart(data) {
+        if (chart) chart.destroy();
+        const labels = data.map(s => s.name);
+        const progress = data.map(s => s.progress);
+
+        chart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Skill Progress %',
+              data: progress,
+              backgroundColor: 'rgba(54, 162, 235, 0.6)',
+              borderColor: 'rgba(54, 162, 235, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100
+              }
+            }
+          }
+        });
+      }
+
+      function renderSkills(skillsArray) {
+        const filterValue = filterSelect.value;
+        skillList.innerHTML = '';
+        const filtered = skillsArray.filter(skill => filterValue === 'All' || skill.category === filterValue);
+
+        filtered.forEach((skill, index) => {
+          const item = document.createElement('div');
+          item.className = 'skill-item';
+          item.innerHTML = `
+            <span>${skill.name} (${skill.category}) - ${skill.progress}%</span>
+            <button onclick="deleteSkill(${index})">Delete</button>
+          `;
+          skillList.appendChild(item);
+        });
+
+        renderChart(filtered);
+      }
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = document.getElementById('skill-name').value;
+        const progress = parseInt(document.getElementById('skill-progress').value);
+        const category = document.getElementById('skill-category').value;
+        const newSkill = { name, progress, category };
+        skills.push(newSkill);
+        localStorage.setItem('skills', JSON.stringify(skills));
+        renderSkills(skills);
+        form.reset();
+      });
+
+      window.deleteSkill = function(index) {
+        skills.splice(index, 1);
+        localStorage.setItem('skills', JSON.stringify(skills));
+        renderSkills(skills);
+      }
+
+      toggleDarkBtn.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode');
+      });
+
+      exportJsonBtn.addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(skills, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'skills.json';
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+
+      filterSelect.addEventListener('change', () => renderSkills(skills));
+
+      renderSkills(skills);
+    });
+  </script>
+</body>
+</html>
